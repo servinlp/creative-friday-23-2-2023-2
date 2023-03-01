@@ -7,9 +7,6 @@ varying vec3 vEyeVector;
 uniform vec2 uResolution;
 uniform sampler2D uTexture;
 
-// uniform float uIorR;
-// uniform float uIorG;
-// uniform float uIorB;
 uniform float uIorR;
 uniform float uIorY;
 uniform float uIorG;
@@ -23,6 +20,34 @@ uniform float uRefractPower;
 uniform float uChromaticAberration;
 uniform float uSaturation;
 
+uniform float uFresnelPower;
+
+uniform float uShininess;
+uniform float uDiffuseness;
+uniform vec3 uLight;
+
+float specular(vec3 light, float shininess, float diffuseness) {
+  vec3 normal = vWorldNormal;
+  vec3 lightVector = normalize(-light);
+  vec3 halfVector = normalize(vEyeVector + lightVector);
+
+  float NdotL = dot(normal, lightVector);
+  float NdotH =  dot(normal, halfVector);
+  float NdotH2 = NdotH * NdotH;
+
+  float kDiffuse = max(0.0, NdotL);
+  float kSpecular = pow(NdotH2, shininess);
+
+  return  kSpecular + kDiffuse * diffuseness;
+}
+
+float fresnel(vec3 eyeVector, vec3 worldNormal, float power) {
+  float fresnelFactor = abs(dot(eyeVector, worldNormal));
+  float inversefresnelFactor = 1.0 - fresnelFactor;
+
+  return pow(inversefresnelFactor, power);
+}
+
 vec3 sat(vec3 rgb, float intensity) {
     vec3 L = vec3(0.2125, 0.7154, 0.0721);
     vec3 grayscale = vec3(dot(rgb, L));
@@ -30,34 +55,17 @@ vec3 sat(vec3 rgb, float intensity) {
 }
 
 void main () {
-    // float iorRatio = 1.0/1.11;
-    float iorRatioX = 1.0/uIorR; //1.1;
-    float iorRatioY = 1.0/uIorG; //1.09;
-    float iorRatioZ = 1.0/uIorB; //1.08;
+    float iorRatioX = 1.0/uIorR;
+    float iorRatioY = 1.0/uIorG;
+    float iorRatioZ = 1.0/uIorB;
     vec3 normal = vWorldNormal;
-    // vec3 refractVec = refract(vEyeVector, normal, iorRatio);
-    // vec3 refractVecX = refract(vEyeVector, normal, iorRatioX);
-    // vec3 refractVecY = refract(vEyeVector, normal, iorRatioY);
-    // vec3 refractVecZ = refract(vEyeVector, normal, iorRatioZ);
 
     vec2 uv = gl_FragCoord.xy / uResolution.xy;
-    // vec4 color = texture2D(uTexture, uv + refractVec.xy);
-    // float r = texture2D(uTexture, uv + refractVecX.xy).r;
-    // float g = texture2D(uTexture, uv + refractVecY.xy).g;
-    // float b = texture2D(uTexture, uv + refractVecZ.xy).b;
 
     vec3 color = vec3(1.0);
 
     for ( int i = 0; i < uLoop; i ++ ) {
         float slide = float(i) / float(uLoop) * 0.1;
-
-        // vec3 refractVecR = refract(vEyeVector, normal, iorRatioX);
-        // vec3 refractVecG = refract(vEyeVector, normal, iorRatioY);
-        // vec3 refractVecB = refract(vEyeVector, normal, iorRatioZ);
-
-        // color.r += texture2D(uTexture, uv + refractVecR.xy * (uRefractPower + slide * 1.0) * uChromaticAberration).r;
-        // color.g += texture2D(uTexture, uv + refractVecG.xy * (uRefractPower + slide * 2.0) * uChromaticAberration).g;
-        // color.b += texture2D(uTexture, uv + refractVecB.xy * (uRefractPower + slide * 3.0) * uChromaticAberration).b;
 
         vec3 refractVecR = refract(vEyeVector, normal,(1.0/uIorR));
         vec3 refractVecY = refract(vEyeVector, normal, (1.0/uIorY));
@@ -96,9 +104,14 @@ void main () {
     }
 
     color /= float(uLoop);
-    // vec4 color = vec4(r, g, b, 1.0);
-    // vec4 color = texture2D(uTexture, uv + vec2(refractVecX, refractVecY));
-    
-    // gl_FragColor = vec4(vUv, 0.0, 1.0);
+
+    // Specular
+    float specularLight = specular(uLight, uShininess, uDiffuseness);
+    color += specularLight;
+
+    // Fresnel
+    float f = fresnel(vEyeVector, normal, uFresnelPower);
+    color.rgb += f * vec3(1.0);
+
     gl_FragColor = vec4(color, 1.0);
 }

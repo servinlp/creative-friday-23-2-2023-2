@@ -1,6 +1,6 @@
 import { Stats, useFBO } from "@react-three/drei";
 import { useMemo, useRef } from "react";
-import { Group, IcosahedronGeometry, Mesh, ShaderMaterial, Vector2 } from "three";
+import { BackSide, FrontSide, Group, IcosahedronGeometry, Mesh, ShaderMaterial, Vector2, Vector3 } from "three";
 import vertexGlassShader from './shaders/glass/vertex.vert'
 import fragmentGlassShader from './shaders/glass/fragment.frag'
 import { useFrame } from "@react-three/fiber";
@@ -10,6 +10,7 @@ export const Dispersion = () => {
   const mesh = useRef<Mesh<IcosahedronGeometry, ShaderMaterial>>(null);
   const backgroundGroup = useRef<Group>(null);
   const mainRenderTarget = useFBO();
+  const backRenderTarget = useFBO();
   
   const uniforms = useMemo(
     () => ({
@@ -51,6 +52,18 @@ export const Dispersion = () => {
       },
       uSaturation: {
         value: null
+      },
+      uLight: {
+        value: null
+      },
+      uDiffuseness: {
+        value: null
+      },
+      uShininess: {
+        value: null
+      },
+      uFresnelPower: {
+        value: null
       }
     }),
     []
@@ -61,16 +74,30 @@ export const Dispersion = () => {
     const { gl, scene, camera } = state;
     // Hide the mesh
     mesh.current.visible = false;
+
+    gl.setRenderTarget(backRenderTarget);
+    // Render the scene into the "back" FBO
+    gl.render(scene, camera);
+
+    // Pass the FBO texture to the material
+    mesh.current.material.uniforms.uTexture.value = backRenderTarget.texture;
+    // Render the backside and display the mesh
+    mesh.current.material.side = BackSide;
+    mesh.current.visible = true;
+
+
     gl.setRenderTarget(mainRenderTarget);
-    // Render into the FBO
+    // Render the scene into the "front" FBO
     gl.render(scene, camera);
 
     // Pass the texture data to our shader material
     mesh.current.material.uniforms.uTexture.value = mainRenderTarget.texture;
+    // Render the frontside
+    mesh.current.material.side = FrontSide;
 
     gl.setRenderTarget(null);
-    // Show the mesh
-    mesh.current.visible = true;
+    // // Show the mesh
+    // mesh.current.visible = true;
   });
 
   const columns = range(-7.5, 7.5, 2.5);
@@ -128,7 +155,7 @@ export const Dispersion = () => {
     uLoop: {
       value: 23,
       min: 1,
-      max: 30,
+      max: 100,
       step: 1,
       onChange(v) {
         uniforms.uLoop.value = v
@@ -160,13 +187,37 @@ export const Dispersion = () => {
       onChange(v) {
         uniforms.uSaturation.value = v
       }
-    }
+    },
+    uLight: {
+      value: [-2.0, 10.0, 5.0],
+      onChange(v) {
+        uniforms.uLight.value = v
+      }
+    },
+    uDiffuseness: {
+      value: 0.52,
+      onChange(v) {
+        uniforms.uDiffuseness.value = v
+      }
+    },
+    uShininess: {
+      value: 4.2,
+      onChange(v) {
+        uniforms.uShininess.value = v
+      }
+    },
+    uFresnelPower: {
+      value: 16.5,
+      onChange(v) {
+        uniforms.uFresnelPower.value = v
+      }
+    },
   })
   
   return (
     <>
-    <color attach="background" args={["black"]} />
-      <group ref={backgroundGroup}>
+      <color attach="background" args={["black"]} />
+      {/* <group ref={backgroundGroup}>
         {columns.map((col, i) =>
           rows.map((row, j) => (
             <mesh position={[col, row, -4]} key={`icosahedronGeometry-${(Math.random()) + i * j }`}>
@@ -175,7 +226,7 @@ export const Dispersion = () => {
             </mesh>
           ))
         )}
-      </group>
+      </group> */}
     {/* <mesh>
       <boxGeometry args={[3, 3, 3]} />
       <meshStandardMaterial color="hotpink" />
@@ -183,7 +234,9 @@ export const Dispersion = () => {
     <Stats />
     <hemisphereLight />
     <mesh ref={mesh}>
-      <icosahedronGeometry args={[2, 20]} />
+      <torusGeometry args={[3, 1, 32, 100]} />
+      {/* <planeGeometry args={[10, 10]} /> */}
+      {/* <icosahedronGeometry args={[2, 20]} /> */}
       <shaderMaterial
         vertexShader={vertexGlassShader}
         fragmentShader={fragmentGlassShader}
